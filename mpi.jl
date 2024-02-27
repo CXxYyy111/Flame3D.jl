@@ -1,7 +1,7 @@
 # CUDA-aware MPI not available
 function exchange_ghost(Q, NV, rank, comm, sbuf_h, sbuf_d, rbuf_h, rbuf_d)
     nthreads = (NG, 16, 16)
-    nblocks = (1, cld((Ny+2*NG), 16), cld((Nz+2*NG), 16))
+    ngroups = (1, cld((Ny+2*NG), 16), cld((Nz+2*NG), 16))
 
     # x+
     src = (rank - 1 == -1 ? MPI.PROC_NULL : (rank - 1)) 
@@ -9,13 +9,13 @@ function exchange_ghost(Q, NV, rank, comm, sbuf_h, sbuf_d, rbuf_h, rbuf_d)
 
     if src != MPI.PROC_NULL || dst != MPI.PROC_NULL
         if dst != MPI.PROC_NULL
-            @roc groupsize=nthreads gridsize=ngroupss pack_R(sbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroups pack_R(sbuf_d, Q, NV)
             copyto!(sbuf_h, sbuf_d)
         end
         MPI.Sendrecv!(sbuf_h, rbuf_h, comm; dest=dst, source=src)
         if src != MPI.PROC_NULL
             copyto!(rbuf_d, rbuf_h)
-            @roc groupsize=nthreads gridsize=ngroupss unpack_L(rbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroups unpack_L(rbuf_d, Q, NV)
         end
     end
 
@@ -25,13 +25,13 @@ function exchange_ghost(Q, NV, rank, comm, sbuf_h, sbuf_d, rbuf_h, rbuf_d)
 
     if src != MPI.PROC_NULL || dst != MPI.PROC_NULL
         if dst != MPI.PROC_NULL
-            @roc groupsize=nthreads gridsize=ngroupss pack_L(sbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroups pack_L(sbuf_d, Q, NV)
             copyto!(sbuf_h, sbuf_d)
         end
         MPI.Sendrecv!(sbuf_h, rbuf_h, comm; dest=dst, source=src)
         if src != MPI.PROC_NULL
             copyto!(rbuf_d, rbuf_h)
-            @roc groupsize=nthreads gridsize=ngroupss unpack_R(rbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroups unpack_R(rbuf_d, Q, NV)
         end
     end
 end

@@ -2,7 +2,7 @@ function div(U, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dt, J)
     i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
     j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
     k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
-    if i > Nxp || j > Ny || k > Nz+NG
+    if i > Nxp || j > Ny || k > Nz
         return
     end
 

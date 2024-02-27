@@ -156,10 +156,10 @@ function time_step(rank, comm, thermo, consts, react)
     Mem.pin(dsbuf_h)
     Mem.pin(dsbuf_h)
 
-    Qsbuf_d = ROCArray(Qsbuf_h)
-    Qrbuf_d = ROCArray(Qrbuf_h)
-    dsbuf_d = ROCArray(dsbuf_h)
-    drbuf_d = ROCArray(drbuf_h)
+    Qsbuf_d = unsafe_wrap(ROCArray, pointer(Qsbuf_h), size(Qsbuf_h))
+    Qrbuf_d = unsafe_wrap(ROCArray, pointer(Qrbuf_h), size(Qrbuf_h))
+    dsbuf_d = unsafe_wrap(ROCArray, pointer(dsbuf_h), size(dsbuf_h))
+    drbuf_d = unsafe_wrap(ROCArray, pointer(drbuf_h), size(drbuf_h))
 
     # initial
     @roc groupsize=nthreads gridsize=ngroups prim2c(U, Q)
@@ -173,8 +173,7 @@ function time_step(rank, comm, thermo, consts, react)
         if Cantera
             # CPU evaluation needed
             inputs_h = zeros(Float64, Nspecs+2, Nxp*Ny*Nz)
-            Mem.pin(inputs_h)
-            inputs = ROCArray(inputs_h)
+            inputs = unsafe_wrap(ROCArray, pointer(inputs_h), size(inputs_h))
         end
 
         dt2 = dt/2

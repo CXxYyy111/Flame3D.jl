@@ -103,7 +103,7 @@ if nGPU != Nprocs && rank == 0
     error("Oops, nGPU ≠ $Nprocs\n")
 end
 # set device on each MPI rank
-device!(rank)
+device!(AMDGPU.devices()[rank+1])
 # constant parameters
 const thermo = initThermo(mech) # now only NASA7
 const react = initReact(mech)
