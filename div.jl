@@ -1,7 +1,7 @@
 function div(U, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dt, J)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
     if i > Nxp || j > Ny || k > Nz+NG
         return
     end
@@ -35,9 +35,9 @@ function div(U, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dt, J)
 end
 
 function divSpecs(U, Fx, Fy, Fz, Fd_x, Fd_y, Fd_z, dt, J)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
     if i > Nxp || j > Ny || k > Nz
         return
     end

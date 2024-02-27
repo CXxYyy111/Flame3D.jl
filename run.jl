@@ -14,8 +14,6 @@ const Nspecs::Int64 = 9            # number of species
 const Nreacs::Int64 = 21           # number of reactions, consistent with mech
 const mech::String = "./NN/H2/LiDryer.yaml" # reaction mechanism file in cantera format
 
-const Luxmodel::Bool = false       # if use Neural network model
-
 const Cantera::Bool = false         # if use Cantera
 const nthreads_cantera::Int64 = 24  # Cantera openmp threads
 
@@ -46,10 +44,9 @@ const Nx::Int64 = h5read("metrics.h5", "Nx")
 const Ny::Int64 = h5read("metrics.h5", "Ny")
 const Nz::Int64 = h5read("metrics.h5", "Nz")
 const Nxp::Int64 = Nx ÷ Nprocs # make sure it is integer
-# here we use 256 threads/block and limit registers to 255
-const maxreg::Int64 = 255
+# here we use 256 threads/group
 const nthreads::Tuple{Int32, Int32, Int32} = (4, 8, 8)
-const nblock::Tuple{Int32, Int32, Int32} = (cld((Nxp+2*NG), 4), 
+const ngroups::Tuple{Int32, Int32, Int32} = (cld((Nxp+2*NG), 4), 
                                             cld((Ny+2*NG), 8),
                                             cld((Nz+2*NG), 8))
 
@@ -111,12 +108,12 @@ device!(rank)
 const thermo = initThermo(mech) # now only NASA7
 const react = initReact(mech)
 const consts = constants(287.0, 1.4, 1.458e-6, 110.4, 0.72, 1004.5, 
-         CuArray([2/3, 1/12]),
-         CuArray([1e-4, 0.2]),
-         CuArray([1e-14, 13/12, 1/6]),
-         CuArray([1e-40, 1e-5, 1/6]),
-         CuArray([-3/420, 25/420, -101/420, 319/420, 214/420, -38/420, 4/420]))
+         ROCArray([2/3, 1/12]),
+         ROCArray([1e-4, 0.2]),
+         ROCArray([1e-14, 13/12, 1/6]),
+         ROCArray([1e-40, 1e-5, 1/6]),
+         ROCArray([-3/420, 25/420, -101/420, 319/420, 214/420, -38/420, 4/420]))
 
-CUDA.@time time_step(rank, comm, thermo, consts, react)
+time_step(rank, comm, thermo, consts, react)
 
 MPI.Finalize()

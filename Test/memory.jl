@@ -1,8 +1,8 @@
-using CUDA
+using AMDGPU
 using StaticArrays
 
 function test(a)
-    i = (blockIdx().x-1)* blockDim().x + threadIdx().x
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
     b = MVector{20, Float64}(undef)
     for n = 1:20
         @inbounds b[n] = n
@@ -13,7 +13,7 @@ function test(a)
 end
 
 function test2(a, b)
-    i = (blockIdx().x-1)* blockDim().x + threadIdx().x
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
 
     for n = 1:20
         @inbounds b[n] = n
@@ -25,10 +25,10 @@ end
 
 a1 = zeros(Float64, 128)
 a2 = zeros(Float64, 128)
-a = CuArray(zeros(Float64, 128))
-b = CuArray(zeros(Float64, 128, 20))
-CUDA.@time @cuda threads=128 test(a)
+a = ROCArray(zeros(Float64, 128))
+b = ROCArray(zeros(Float64, 128, 20))
+@roc groupsize=128 test(a)
 copyto!(a1, a)
 @show a1
-CUDA.@time @cuda threads=128 test2(a, b)
+@roc groupsize=128 test2(a, b)
 copyto!(a2, a)

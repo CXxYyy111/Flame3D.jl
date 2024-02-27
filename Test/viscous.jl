@@ -1,8 +1,8 @@
 # old two times viscous term
 function viscousFlux(Fv_x, Fv_y, Fv_z, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fh, consts)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > Nxp+2*NG-2 || j > Ny+2*NG-2 || k > Nz+2*NG-2 || i < 3 || j < 3 || k < 3
         return
@@ -100,9 +100,9 @@ end
 
 # Range: 3 -> N+2*NG-2
 function specViscousFlux(Fv_x, Fv_y, Fv_z, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fh, thermo, consts)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > Nxp+2*NG-2 || j > Ny+2*NG-2 || k > Nz+2*NG-2 || i < 3 || j < 3 || k < 3
         return
@@ -178,9 +178,9 @@ end
 
 # Range: 1+NG -> N+NG
 function div_old(U, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dt, J, consts)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
     if i > Nxp+NG || i < 1+NG || j > Ny+NG || j < 1+NG || k > Nz+NG || k < 1+NG 
         return
     end
@@ -229,9 +229,9 @@ end
 
 # Range: 1+NG -> N+NG
 function divSpecs_old(U, Fx, Fy, Fz, Fd_x, Fd_y, Fd_z, dt, J, consts)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
     if i > Nxp+NG || i < 1+NG || j > Ny+NG || j < 1+NG || k > Nz+NG || k < 1+NG
         return
     end

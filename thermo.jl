@@ -364,9 +364,9 @@ end
 end
 
 function mixture(Q, ρi, Yi, λ, μ, D, thermo)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > Nxp+2*NG || j > Ny+2*NG || k > Nz+2*NG
         return
@@ -381,7 +381,7 @@ function mixture(Q, ρi, Yi, λ, μ, D, thermo)
 
     Y1 = @inbounds @view Yi[i, j, k, :]
 
-    @inbounds ρinv::Float64 = 1/max(Q[i, j, k, 1], CUDA.eps(Float64))
+    @inbounds ρinv::Float64 = 1/max(Q[i, j, k, 1], eps(Float64))
     for n = 1:Nspecs
         @inbounds Y1[n] = max(ρi[i, j, k, n]*ρinv, 0.0)
     end
@@ -422,9 +422,9 @@ function initThermo(mech)
         end
     end
 
-    thermo = thermoProperty(Ru, min_temp, max_temp, CuArray(mw),
-                            CuArray(coeffs_sep), CuArray(coeffs_lo), CuArray(coeffs_hi), 
-                            CuArray(viscosity_poly), CuArray(conductivity_poly), CuArray(binarydiffusion_poly))
+    thermo = thermoProperty(Ru, min_temp, max_temp, ROCArray(mw),
+                            ROCArray(coeffs_sep), ROCArray(coeffs_lo), ROCArray(coeffs_hi), 
+                            ROCArray(viscosity_poly), ROCArray(conductivity_poly), ROCArray(binarydiffusion_poly))
     return thermo
 end
 
@@ -437,7 +437,7 @@ end
 # gas.TPY = T, P, "CH4:1"
 
 # ρi = gas.Y * gas.density
-# ρi_d = CuArray(ρi)
+# ρi_d = ROCArray(ρi)
 # thermo = initThermo(mech)
 # ei = InternalEnergy(T, ρi, thermo)
 # @show ei

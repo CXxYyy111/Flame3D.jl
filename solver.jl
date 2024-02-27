@@ -1,12 +1,7 @@
 using MPI
 using WriteVTK
-using Lux, LuxCUDA
-using LinearAlgebra, StaticArrays, CUDA
-using CUDA:i32
+using LinearAlgebra, StaticArrays, AMDGPU
 using JLD2, JSON, HDF5
-
-CUDA.allowscalar(false)
-LinearAlgebra.BLAS.set_num_threads(1)
 
 include("split.jl")
 include("schemes.jl")
@@ -20,38 +15,38 @@ include("mpi.jl")
 
 function flowAdvance(U, Q, Fp, Fm, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, dt, ϕ, λ, μ, Fhx, Fhy, Fhz, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock fluxSplit(Q, Fp, Fm, dξdx, dξdy, dξdz)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock WENO_x(Fx, ϕ, Fp, Fm, Ncons, consts)
+    @roc groupsize=nthreads gridsize=ngroups fluxSplit(Q, Fp, Fm, dξdx, dξdy, dξdz)
+    @roc groupsize=nthreads gridsize=ngroups WENO_x(Fx, ϕ, Fp, Fm, Ncons, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock fluxSplit(Q, Fp, Fm, dηdx, dηdy, dηdz)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock WENO_y(Fy, ϕ, Fp, Fm, Ncons, consts)
+    @roc groupsize=nthreads gridsize=ngroups fluxSplit(Q, Fp, Fm, dηdx, dηdy, dηdz)
+    @roc groupsize=nthreads gridsize=ngroups WENO_y(Fy, ϕ, Fp, Fm, Ncons, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock fluxSplit(Q, Fp, Fm, dζdx, dζdy, dζdz)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock WENO_z(Fz, ϕ, Fp, Fm, Ncons, consts)
+    @roc groupsize=nthreads gridsize=ngroups fluxSplit(Q, Fp, Fm, dζdx, dζdy, dζdz)
+    @roc groupsize=nthreads gridsize=ngroups WENO_z(Fz, ϕ, Fp, Fm, Ncons, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock viscousFlux_x(Fv_x, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fhx, consts)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock viscousFlux_y(Fv_y, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fhy, consts)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock viscousFlux_z(Fv_z, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fhz, consts)
+    @roc groupsize=nthreads gridsize=ngroups viscousFlux_x(Fv_x, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fhx, consts)
+    @roc groupsize=nthreads gridsize=ngroups viscousFlux_y(Fv_y, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fhy, consts)
+    @roc groupsize=nthreads gridsize=ngroups viscousFlux_z(Fv_z, Q, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, λ, μ, Fhz, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock div(U, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dt, J)
+    @roc groupsize=nthreads gridsize=ngroups div(U, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dt, J)
 end
 
 function specAdvance(ρi, Q, Yi, Fp_i, Fm_i, Fx_i, Fy_i, Fz_i, Fd_x, Fd_y, Fd_z, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, dt, ϕ, D, Fhx, Fhy, Fhz, thermo, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock split(ρi, Q, Fp_i, Fm_i, dξdx, dξdy, dξdz)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock WENO_x(Fx_i, ϕ, Fp_i, Fm_i, Nspecs, consts)
+    @roc groupsize=nthreads gridsize=ngroups split(ρi, Q, Fp_i, Fm_i, dξdx, dξdy, dξdz)
+    @roc groupsize=nthreads gridsize=ngroups WENO_x(Fx_i, ϕ, Fp_i, Fm_i, Nspecs, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock split(ρi, Q, Fp_i, Fm_i, dηdx, dηdy, dηdz)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock WENO_y(Fy_i, ϕ, Fp_i, Fm_i, Nspecs, consts)
+    @roc groupsize=nthreads gridsize=ngroups split(ρi, Q, Fp_i, Fm_i, dηdx, dηdy, dηdz)
+    @roc groupsize=nthreads gridsize=ngroups WENO_y(Fy_i, ϕ, Fp_i, Fm_i, Nspecs, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock split(ρi, Q, Fp_i, Fm_i, dζdx, dζdy, dζdz)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock WENO_z(Fz_i, ϕ, Fp_i, Fm_i, Nspecs, consts)
+    @roc groupsize=nthreads gridsize=ngroups split(ρi, Q, Fp_i, Fm_i, dζdx, dζdy, dζdz)
+    @roc groupsize=nthreads gridsize=ngroups WENO_z(Fz_i, ϕ, Fp_i, Fm_i, Nspecs, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock specViscousFlux_x(Fd_x, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fhx, thermo, consts)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock specViscousFlux_y(Fd_y, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fhy, thermo, consts)
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock specViscousFlux_z(Fd_z, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fhz, thermo, consts)
+    @roc groupsize=nthreads gridsize=ngroups specViscousFlux_x(Fd_x, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fhx, thermo, consts)
+    @roc groupsize=nthreads gridsize=ngroups specViscousFlux_y(Fd_y, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fhy, thermo, consts)
+    @roc groupsize=nthreads gridsize=ngroups specViscousFlux_z(Fd_z, Q, Yi, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, D, Fhz, thermo, consts)
 
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock divSpecs(ρi, Fx_i, Fy_i, Fz_i, Fd_x, Fd_y, Fd_z, dt, J)
+    @roc groupsize=nthreads gridsize=ngroups divSpecs(ρi, Fx_i, Fy_i, Fz_i, Fd_x, Fd_y, Fd_z, dt, J)
 end
 
 function time_step(rank, comm, thermo, consts, react)
@@ -74,13 +69,13 @@ function time_step(rank, comm, thermo, consts, react)
         ρi_h = fid["ρi_h"][:, :, :, :, rank+1]
         close(fid)
 
-        Q  =   CuArray(Q_h)
-        ρi =   CuArray(ρi_h)
+        Q  =   ROCArray(Q_h)
+        ρi =   ROCArray(ρi_h)
     else
         Q_h = zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nprim)
         ρi_h = zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
-        Q = CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nprim)
-        ρi =CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
+        Q = AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nprim)
+        ρi =AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
         initialize(Q, ρi, thermo)
 
         copyto!(Q_h, Q)
@@ -108,45 +103,45 @@ function time_step(rank, comm, thermo, consts, react)
     close(fid)
 
     # move to device memory
-    dξdx = CuArray(dξdx_h)
-    dξdy = CuArray(dξdy_h)
-    dξdz = CuArray(dξdz_h)
-    dηdx = CuArray(dηdx_h)
-    dηdy = CuArray(dηdy_h)
-    dηdz = CuArray(dηdz_h)
-    dζdx = CuArray(dζdx_h)
-    dζdy = CuArray(dζdy_h)
-    dζdz = CuArray(dζdz_h)
-    J = CuArray(J_h)
+    dξdx = ROCArray(dξdx_h)
+    dξdy = ROCArray(dξdy_h)
+    dξdz = ROCArray(dξdz_h)
+    dηdx = ROCArray(dηdx_h)
+    dηdy = ROCArray(dηdy_h)
+    dηdz = ROCArray(dηdz_h)
+    dζdx = ROCArray(dζdx_h)
+    dζdy = ROCArray(dζdy_h)
+    dζdz = ROCArray(dζdz_h)
+    J = ROCArray(J_h)
 
     # allocate on device
-    Yi =   CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
-    ϕ  =   CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot) # Shock sensor
-    U  =   CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Ncons)
-    Fp =   CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Ncons)
-    Fm =   CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Ncons)
-    Fx =   CUDA.zeros(Float64, Nxp+1, Ny, Nz, Ncons)
-    Fy =   CUDA.zeros(Float64, Nxp, Ny+1, Nz, Ncons)
-    Fz =   CUDA.zeros(Float64, Nxp, Ny, Nz+1, Ncons)
-    Fv_x = CUDA.zeros(Float64, Nxp+1, Ny, Nz, 4)
-    Fv_y = CUDA.zeros(Float64, Nxp, Ny+1, Nz, 4)
-    Fv_z = CUDA.zeros(Float64, Nxp, Ny, Nz+1, 4)
+    Yi =   AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
+    ϕ  =   AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot) # Shock sensor
+    U  =   AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Ncons)
+    Fp =   AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Ncons)
+    Fm =   AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Ncons)
+    Fx =   AMDGPU.zeros(Float64, Nxp+1, Ny, Nz, Ncons)
+    Fy =   AMDGPU.zeros(Float64, Nxp, Ny+1, Nz, Ncons)
+    Fz =   AMDGPU.zeros(Float64, Nxp, Ny, Nz+1, Ncons)
+    Fv_x = AMDGPU.zeros(Float64, Nxp+1, Ny, Nz, 4)
+    Fv_y = AMDGPU.zeros(Float64, Nxp, Ny+1, Nz, 4)
+    Fv_z = AMDGPU.zeros(Float64, Nxp, Ny, Nz+1, 4)
 
-    Fp_i = CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
-    Fm_i = CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
-    Fx_i = CUDA.zeros(Float64, Nxp+1, Ny, Nz, Nspecs) # species advection
-    Fy_i = CUDA.zeros(Float64, Nxp, Ny+1, Nz, Nspecs) # species advection
-    Fz_i = CUDA.zeros(Float64, Nxp, Ny, Nz+1, Nspecs) # species advection
-    Fd_x = CUDA.zeros(Float64, Nxp+1, Ny, Nz, Nspecs) # species diffusion
-    Fd_y = CUDA.zeros(Float64, Nxp, Ny+1, Nz, Nspecs) # species diffusion
-    Fd_z = CUDA.zeros(Float64, Nxp, Ny, Nz+1, Nspecs) # species diffusion
-    Fhx = CUDA.zeros(Float64, Nxp+1, Ny, Nz, 3) # enthalpy diffusion
-    Fhy = CUDA.zeros(Float64, Nxp, Ny+1, Nz, 3) # enthalpy diffusion
-    Fhz = CUDA.zeros(Float64, Nxp, Ny, Nz+1, 3) # enthalpy diffusion
+    Fp_i = AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
+    Fm_i = AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
+    Fx_i = AMDGPU.zeros(Float64, Nxp+1, Ny, Nz, Nspecs) # species advection
+    Fy_i = AMDGPU.zeros(Float64, Nxp, Ny+1, Nz, Nspecs) # species advection
+    Fz_i = AMDGPU.zeros(Float64, Nxp, Ny, Nz+1, Nspecs) # species advection
+    Fd_x = AMDGPU.zeros(Float64, Nxp+1, Ny, Nz, Nspecs) # species diffusion
+    Fd_y = AMDGPU.zeros(Float64, Nxp, Ny+1, Nz, Nspecs) # species diffusion
+    Fd_z = AMDGPU.zeros(Float64, Nxp, Ny, Nz+1, Nspecs) # species diffusion
+    Fhx = AMDGPU.zeros(Float64, Nxp+1, Ny, Nz, 3) # enthalpy diffusion
+    Fhy = AMDGPU.zeros(Float64, Nxp, Ny+1, Nz, 3) # enthalpy diffusion
+    Fhz = AMDGPU.zeros(Float64, Nxp, Ny, Nz+1, 3) # enthalpy diffusion
 
-    μ = CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot)
-    λ = CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot)
-    D = CUDA.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
+    μ = AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot)
+    λ = AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot)
+    D = AMDGPU.zeros(Float64, Nx_tot, Ny_tot, Nz_tot, Nspecs)
     
     Un = similar(U)
     ρn = similar(ρi)
@@ -161,13 +156,13 @@ function time_step(rank, comm, thermo, consts, react)
     Mem.pin(dsbuf_h)
     Mem.pin(dsbuf_h)
 
-    Qsbuf_d = CuArray(Qsbuf_h)
-    Qrbuf_d = CuArray(Qrbuf_h)
-    dsbuf_d = CuArray(dsbuf_h)
-    drbuf_d = CuArray(drbuf_h)
+    Qsbuf_d = ROCArray(Qsbuf_h)
+    Qrbuf_d = ROCArray(Qrbuf_h)
+    dsbuf_d = ROCArray(dsbuf_h)
+    drbuf_d = ROCArray(drbuf_h)
 
     # initial
-    @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock prim2c(U, Q)
+    @roc groupsize=nthreads gridsize=ngroups prim2c(U, Q)
     exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
     exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
     MPI.Barrier(comm)
@@ -175,38 +170,11 @@ function time_step(rank, comm, thermo, consts, react)
     fillSpec(ρi)
 
     if reaction
-        if Luxmodel
-            @load "./NN/Air/luxmodel.jld2" model ps st
-
-            ps = ps |> gpu_device()
-
-            w1 = ps[1].weight
-            b1 = ps[1].bias
-            w2 = ps[2].weight
-            b2 = ps[2].bias
-            w3 = ps[3].weight
-            b3 = ps[3].bias
-
-            Y1 = CUDA.ones(Float32, 64, Nxp*Ny*Nz)
-            Y2 = CUDA.ones(Float32, 256, Nxp*Ny*Nz)
-            yt_pred = CUDA.ones(Float32, Nspecs+1, Nxp*Ny*Nz)
-
-            j = JSON.parsefile("./NN/Air/norm.json")
-            lambda = j["lambda"]
-            inputs_mean = CuArray(convert(Vector{Float32}, j["inputs_mean"]))
-            inputs_std =  CuArray(convert(Vector{Float32}, j["inputs_std"]))
-            labels_mean = CuArray(convert(Vector{Float32}, j["labels_mean"]))
-            labels_std =  CuArray(convert(Vector{Float32}, j["labels_std"]))
-
-            inputs = CUDA.zeros(Float32, Nspecs+2, Nxp*Ny*Nz)
-            inputs_norm = CUDA.zeros(Float32, Nspecs+2, Nxp*Ny*Nz)
-        end
-        
         if Cantera
             # CPU evaluation needed
             inputs_h = zeros(Float64, Nspecs+2, Nxp*Ny*Nz)
             Mem.pin(inputs_h)
-            inputs = CuArray(inputs_h)
+            inputs = ROCArray(inputs_h)
         end
 
         dt2 = dt/2
@@ -219,25 +187,13 @@ function time_step(rank, comm, thermo, consts, react)
 
         if reaction
             # Reaction Step
-            if Luxmodel
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock getY(Yi, ρi, Q)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock pre_input(inputs, inputs_norm, Q, Yi, lambda, inputs_mean, inputs_std)
-                evalModel(Y1, Y2, yt_pred, w1, w2, w3, b1, b2, b3, inputs_norm)
-                @. yt_pred = yt_pred * labels_std + labels_mean
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock post_predict(yt_pred, inputs, U, Q, ρi, dt2, lambda, thermo)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock c2Prim(U, Q, ρi, thermo)
-                exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
-                exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
-                MPI.Barrier(comm)
-                fillGhost(Q, U, ρi, Yi, thermo, rank)
-                fillSpec(ρi)
-            elseif Cantera
+            if Cantera
                 # CPU - cantera
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock pre_input_cpu(inputs, Q, ρi)
+                @roc groupsize=nthreads gridsize=ngroups pre_input_cpu(inputs, Q, ρi)
                 copyto!(inputs_h, inputs)
                 eval_cpu(inputs_h, dt2)
                 copyto!(inputs, inputs_h)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock post_eval_cpu(inputs, U, Q, ρi, thermo)
+                @roc groupsize=nthreads gridsize=ngroups post_eval_cpu(inputs, U, Q, ρi, thermo)
                 exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
                 exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
                 MPI.Barrier(comm)
@@ -247,9 +203,9 @@ function time_step(rank, comm, thermo, consts, react)
                 # GPU
                 for _ = 1:sub_step
                     if stiff
-                        @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock eval_gpu_stiff(U, Q, ρi, dt2/sub_step, thermo, react)
+                        @roc groupsize=nthreads gridsize=ngroups eval_gpu_stiff(U, Q, ρi, dt2/sub_step, thermo, react)
                     else
-                        @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock eval_gpu(U, Q, ρi, dt2/sub_step, thermo, react)
+                        @roc groupsize=nthreads gridsize=ngroups eval_gpu(U, Q, ρi, dt2/sub_step, thermo, react)
                     end
                 end
                 exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
@@ -267,20 +223,20 @@ function time_step(rank, comm, thermo, consts, react)
                 copyto!(ρn, ρi)
             end
 
-            @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock mixture(Q, ρi, Yi, λ, μ, D, thermo)
-            @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock shockSensor(ϕ, Q)
+            @roc groupsize=nthreads gridsize=ngroups mixture(Q, ρi, Yi, λ, μ, D, thermo)
+            @roc groupsize=nthreads gridsize=ngroups shockSensor(ϕ, Q)
             specAdvance(ρi, Q, Yi, Fp_i, Fm_i, Fx_i, Fy_i, Fz_i, Fd_x, Fd_y, Fd_z, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, dt, ϕ, D, Fhx, Fhy, Fhz, thermo, consts)
             flowAdvance(U, Q, Fp, Fm, Fx, Fy, Fz, Fv_x, Fv_y, Fv_z, dξdx, dξdy, dξdz, dηdx, dηdy, dηdz, dζdx, dζdy, dζdz, J, dt, ϕ, λ, μ, Fhx, Fhy, Fhz, consts)
 
             if KRK == 2
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock linComb(U, Un, Ncons, 0.25, 0.75)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock linComb(ρi, ρn, Nspecs, 0.25, 0.75)
+                @roc groupsize=nthreads gridsize=ngroups linComb(U, Un, Ncons, 0.25, 0.75)
+                @roc groupsize=nthreads gridsize=ngroups linComb(ρi, ρn, Nspecs, 0.25, 0.75)
             elseif KRK == 3
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock linComb(U, Un, Ncons, 2/3, 1/3)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock linComb(ρi, ρn, Nspecs, 2/3, 1/3)
+                @roc groupsize=nthreads gridsize=ngroups linComb(U, Un, Ncons, 2/3, 1/3)
+                @roc groupsize=nthreads gridsize=ngroups linComb(ρi, ρn, Nspecs, 2/3, 1/3)
             end
 
-            @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock c2Prim(U, Q, ρi, thermo)
+            @roc groupsize=nthreads gridsize=ngroups c2Prim(U, Q, ρi, thermo)
             exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
             exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
             MPI.Barrier(comm)
@@ -290,25 +246,13 @@ function time_step(rank, comm, thermo, consts, react)
 
         if reaction
             # Reaction Step
-            if Luxmodel
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock getY(Yi, ρi, Q)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock pre_input(inputs, inputs_norm, Q, Yi, lambda, inputs_mean, inputs_std)
-                evalModel(Y1, Y2, yt_pred, w1, w2, w3, b1, b2, b3, inputs_norm)
-                @. yt_pred = yt_pred * labels_std + labels_mean
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock post_predict(yt_pred, inputs, U, Q, ρi, dt2, lambda, thermo)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock c2Prim(U, Q, ρi, thermo)
-                exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
-                exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
-                MPI.Barrier(comm)
-                fillGhost(Q, U, ρi, Yi, thermo, rank)
-                fillSpec(ρi)
-            elseif Cantera
+            if Cantera
                 # CPU - cantera
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock pre_input_cpu(inputs, Q, ρi)
+                @roc groupsize=nthreads gridsize=ngroups pre_input_cpu(inputs, Q, ρi)
                 copyto!(inputs_h, inputs)
                 eval_cpu(inputs_h, dt2)
                 copyto!(inputs, inputs_h)
-                @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock post_eval_cpu(inputs, U, Q, ρi, thermo)
+                @roc groupsize=nthreads gridsize=ngroups post_eval_cpu(inputs, U, Q, ρi, thermo)
                 exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
                 exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
                 MPI.Barrier(comm)
@@ -318,9 +262,9 @@ function time_step(rank, comm, thermo, consts, react)
                 # GPU
                 for _ = 1:sub_step
                     if stiff
-                        @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock eval_gpu_stiff(U, Q, ρi, dt2/sub_step, thermo, react)
+                        @roc groupsize=nthreads gridsize=ngroups eval_gpu_stiff(U, Q, ρi, dt2/sub_step, thermo, react)
                     else
-                        @cuda maxregs=maxreg fastmath=true threads=nthreads blocks=nblock eval_gpu(U, Q, ρi, dt2/sub_step, thermo, react)
+                        @roc groupsize=nthreads gridsize=ngroups eval_gpu(U, Q, ρi, dt2/sub_step, thermo, react)
                     end
                 end
                 exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)

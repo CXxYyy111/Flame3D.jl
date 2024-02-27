@@ -9,13 +9,13 @@ function exchange_ghost(Q, NV, rank, comm, sbuf_h, sbuf_d, rbuf_h, rbuf_d)
 
     if src != MPI.PROC_NULL || dst != MPI.PROC_NULL
         if dst != MPI.PROC_NULL
-            @cuda threads=nthreads blocks=nblocks pack_R(sbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroupss pack_R(sbuf_d, Q, NV)
             copyto!(sbuf_h, sbuf_d)
         end
         MPI.Sendrecv!(sbuf_h, rbuf_h, comm; dest=dst, source=src)
         if src != MPI.PROC_NULL
             copyto!(rbuf_d, rbuf_h)
-            @cuda threads=nthreads blocks=nblocks unpack_L(rbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroupss unpack_L(rbuf_d, Q, NV)
         end
     end
 
@@ -25,21 +25,21 @@ function exchange_ghost(Q, NV, rank, comm, sbuf_h, sbuf_d, rbuf_h, rbuf_d)
 
     if src != MPI.PROC_NULL || dst != MPI.PROC_NULL
         if dst != MPI.PROC_NULL
-            @cuda threads=nthreads blocks=nblocks pack_L(sbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroupss pack_L(sbuf_d, Q, NV)
             copyto!(sbuf_h, sbuf_d)
         end
         MPI.Sendrecv!(sbuf_h, rbuf_h, comm; dest=dst, source=src)
         if src != MPI.PROC_NULL
             copyto!(rbuf_d, rbuf_h)
-            @cuda threads=nthreads blocks=nblocks unpack_R(rbuf_d, Q, NV)
+            @roc groupsize=nthreads gridsize=ngroupss unpack_R(rbuf_d, Q, NV)
         end
     end
 end
 
 function pack_R(buf, Q, NV)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > NG || j > Ny+2*NG || k > Nz+2*NG
         return
@@ -52,9 +52,9 @@ function pack_R(buf, Q, NV)
 end
 
 function pack_L(buf, Q, NV)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > NG || j > Ny+2*NG || k > Nz+2*NG
         return
@@ -67,9 +67,9 @@ function pack_L(buf, Q, NV)
 end
 
 function unpack_L(buf, Q, NV)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > NG || j > Ny+2*NG || k > Nz+2*NG
         return
@@ -82,9 +82,9 @@ function unpack_L(buf, Q, NV)
 end
 
 function unpack_R(buf, Q, NV)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
-    j = (blockIdx().y-1i32)* blockDim().y + threadIdx().y
-    k = (blockIdx().z-1i32)* blockDim().z + threadIdx().z
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
+    j = workitemIdx().y + (workgroupIdx().y - 0x1) * workgroupDim().y
+    k = workitemIdx().z + (workgroupIdx().z - 0x1) * workgroupDim().z
 
     if i > NG || j > Ny+2*NG || k > Nz+2*NG
         return

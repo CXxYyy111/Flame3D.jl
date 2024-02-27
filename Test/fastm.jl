@@ -1,8 +1,7 @@
-using CUDA, BenchmarkTools
-using CUDA:i32
+using AMDGPU, BenchmarkTools
 
 function m1(a, x::Float64)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
     b = 1.0
     sum = 0.0
     for n = 1:100
@@ -16,7 +15,7 @@ function m1(a, x::Float64)
 end
 
 function m2(a, x::Float64)
-    i = (blockIdx().x-1i32)* blockDim().x + threadIdx().x
+    i = workitemIdx().x + (workgroupIdx().x - 0x1) * workgroupDim().x
     b = 1.0
     sum = 0.0
     for n = 1:100
@@ -28,6 +27,6 @@ function m2(a, x::Float64)
 end
 
 
-a = CUDA.zeros(Float64, 800)
+a = AMDGPU.zeros(Float64, 800)
 
-@benchmark CUDA.@sync @cuda fastmath=true threads=800 m1(a, 0.12)
+@benchmark AMDGPU.@sync @roc groupsize=800 m1(a, 0.12)

@@ -29,15 +29,15 @@ for k = 1:Nz, j = 1:Ny, i = 1:Nx
     input[i, j, k, 3:end] .= gas.Y[1:7]
 end
 
-input = CuArray(input)
+input = ROCArray(input)
 
 j = JSON.parsefile("norm.json")
 dt = 2e-8
 lambda = j["lambda"]
-inputs_mean = CuArray(convert(Vector{Float32}, j["inputs_mean"]))
-inputs_std =  CuArray(convert(Vector{Float32}, j["inputs_std"]))
-labels_mean = CuArray(convert(Vector{Float32}, j["labels_mean"]))
-labels_std =  CuArray(convert(Vector{Float32}, j["labels_std"]))
+inputs_mean = ROCArray(convert(Vector{Float32}, j["inputs_mean"]))
+inputs_std =  ROCArray(convert(Vector{Float32}, j["inputs_std"]))
+labels_mean = ROCArray(convert(Vector{Float32}, j["labels_mean"]))
+labels_std =  ROCArray(convert(Vector{Float32}, j["labels_std"]))
 
 inputs_norm = CUDA.zeros(Float32, 9, Nx*Ny*Nz)
 
@@ -65,7 +65,7 @@ nblock = (cld(Nx, 8),
           cld(Ny, 8),
           cld(Nz, 4))
 
-@cuda blocks=nblock threads=nthreads pre_input(input, inputs_norm, lambda, inputs_mean, inputs_std, Nx, Ny, Nz)
+@roc gridsize=ngroups groupsize=nthreads pre_input(input, inputs_norm, lambda, inputs_mean, inputs_std, Nx, Ny, Nz)
 
 @time yt_pred = Lux.apply(model, dev_gpu(inputs_norm), ps, st)[1]
 @. yt_pred = yt_pred * labels_std + labels_mean
