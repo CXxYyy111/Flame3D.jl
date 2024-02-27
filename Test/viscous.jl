@@ -129,11 +129,11 @@ function specViscousFlux(Fv_x, Fv_y, Fv_z, Q, Yi, dξdx, dξdy, dξdz, dηdx, d�
     c2::Float64 = -2/3
 
     # diffusion velocity
-    Vk1 = MVector{Nspecs, Float64}(undef)
-    Vk2 = MVector{Nspecs, Float64}(undef)
-    Vk3 = MVector{Nspecs, Float64}(undef)
+    Vk1 = @ROCStaticLocalArray(Float64, Nspecs, false)
+    Vk2 = @ROCStaticLocalArray(Float64, Nspecs, false)
+    Vk3 = @ROCStaticLocalArray(Float64, Nspecs, false)
     
-    hi = MVector{Nspecs, Float64}(undef)
+    hi = @ROCStaticLocalArray(Float64, Nspecs, false)
     h_specs(hi, T, thermo)
 
     sum1::Float64 = 0

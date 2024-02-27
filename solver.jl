@@ -1,5 +1,6 @@
 using MPI
 using WriteVTK
+using Lux, LuxAMDGPU
 using LinearAlgebra, StaticArrays, AMDGPU
 using JLD2, JSON, HDF5
 
@@ -151,15 +152,11 @@ function time_step(rank, comm, thermo, consts, react)
     Qrbuf_h = similar(Qsbuf_h)
     dsbuf_h = zeros(Float64, NG, Ny_tot, Nz_tot, Nspecs)
     drbuf_h = similar(dsbuf_h)
-    Mem.pin(Qsbuf_h)
-    Mem.pin(Qrbuf_h)
-    Mem.pin(dsbuf_h)
-    Mem.pin(dsbuf_h)
 
-    Qsbuf_d = unsafe_wrap(ROCArray, pointer(Qsbuf_h), size(Qsbuf_h))
-    Qrbuf_d = unsafe_wrap(ROCArray, pointer(Qrbuf_h), size(Qrbuf_h))
-    dsbuf_d = unsafe_wrap(ROCArray, pointer(dsbuf_h), size(dsbuf_h))
-    drbuf_d = unsafe_wrap(ROCArray, pointer(drbuf_h), size(drbuf_h))
+    Qsbuf_d = ROCArray(Qsbuf_h)
+    Qrbuf_d = ROCArray(Qrbuf_h)
+    dsbuf_d = ROCArray(dsbuf_h)
+    drbuf_d = ROCArray(drbuf_h)
 
     # initial
     @roc groupsize=nthreads gridsize=ngroups prim2c(U, Q)
@@ -170,10 +167,37 @@ function time_step(rank, comm, thermo, consts, react)
     fillSpec(ρi)
 
     if reaction
+        if Luxmodel
+            @load "./NN/Air/luxmodel.jld2" model ps st
+
+            ps = ps |> gpu_device()
+
+            w1 = ps[1].weight
+            b1 = ps[1].bias
+            w2 = ps[2].weight
+            b2 = ps[2].bias
+            w3 = ps[3].weight
+            b3 = ps[3].bias
+
+            Y1 = AMDGPU.ones(Float32, 64, Nxp*Ny*Nz)
+            Y2 = AMDGPU.ones(Float32, 256, Nxp*Ny*Nz)
+            yt_pred = AMDGPU.ones(Float32, Nspecs+1, Nxp*Ny*Nz)
+
+            j = JSON.parsefile("./NN/Air/norm.json")
+            lambda = j["lambda"]
+            inputs_mean = ROCArray(convert(Vector{Float32}, j["inputs_mean"]))
+            inputs_std =  ROCArray(convert(Vector{Float32}, j["inputs_std"]))
+            labels_mean = ROCArray(convert(Vector{Float32}, j["labels_mean"]))
+            labels_std =  ROCArray(convert(Vector{Float32}, j["labels_std"]))
+
+            inputs = AMDGPU.zeros(Float32, Nspecs+2, Nxp*Ny*Nz)
+            inputs_norm = AMDGPU.zeros(Float32, Nspecs+2, Nxp*Ny*Nz)
+        end
+
         if Cantera
             # CPU evaluation needed
             inputs_h = zeros(Float64, Nspecs+2, Nxp*Ny*Nz)
-            inputs = unsafe_wrap(ROCArray, pointer(inputs_h), size(inputs_h))
+            inputs = ROCArray(inputs_h)
         end
 
         dt2 = dt/2
@@ -186,7 +210,19 @@ function time_step(rank, comm, thermo, consts, react)
 
         if reaction
             # Reaction Step
-            if Cantera
+            if Luxmodel
+                @roc groupsize=nthreads gridsize=ngroups getY(Yi, ρi, Q)
+                @roc groupsize=nthreads gridsize=ngroups pre_input(inputs, inputs_norm, Q, Yi, lambda, inputs_mean, inputs_std)
+                evalModel(Y1, Y2, yt_pred, w1, w2, w3, b1, b2, b3, inputs_norm)
+                @. yt_pred = yt_pred * labels_std + labels_mean
+                @roc groupsize=nthreads gridsize=ngroups post_predict(yt_pred, inputs, U, Q, ρi, dt2, lambda, thermo)
+                @roc groupsize=nthreads gridsize=ngroups c2Prim(U, Q, ρi, thermo)
+                exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
+                exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
+                MPI.Barrier(comm)
+                fillGhost(Q, U, ρi, Yi, thermo, rank)
+                fillSpec(ρi)
+            elseif Cantera
                 # CPU - cantera
                 @roc groupsize=nthreads gridsize=ngroups pre_input_cpu(inputs, Q, ρi)
                 copyto!(inputs_h, inputs)
@@ -245,7 +281,19 @@ function time_step(rank, comm, thermo, consts, react)
 
         if reaction
             # Reaction Step
-            if Cantera
+            if Luxmodel
+                @roc groupsize=nthreads gridsize=ngroups getY(Yi, ρi, Q)
+                @roc groupsize=nthreads gridsize=ngroups pre_input(inputs, inputs_norm, Q, Yi, lambda, inputs_mean, inputs_std)
+                evalModel(Y1, Y2, yt_pred, w1, w2, w3, b1, b2, b3, inputs_norm)
+                @. yt_pred = yt_pred * labels_std + labels_mean
+                @roc groupsize=nthreads gridsize=ngroups post_predict(yt_pred, inputs, U, Q, ρi, dt2, lambda, thermo)
+                @roc groupsize=nthreads gridsize=ngroups c2Prim(U, Q, ρi, thermo)
+                exchange_ghost(Q, Nprim, rank, comm, Qsbuf_h, Qsbuf_d, Qrbuf_h, Qrbuf_d)
+                exchange_ghost(ρi, Nspecs, rank, comm, dsbuf_h, dsbuf_d, drbuf_h, drbuf_d)
+                MPI.Barrier(comm)
+                fillGhost(Q, U, ρi, Yi, thermo, rank)
+                fillSpec(ρi)
+            elseif Cantera
                 # CPU - cantera
                 @roc groupsize=nthreads gridsize=ngroups pre_input_cpu(inputs, Q, ρi)
                 copyto!(inputs_h, inputs)

@@ -14,6 +14,8 @@ const Nspecs::Int64 = 9            # number of species
 const Nreacs::Int64 = 21           # number of reactions, consistent with mech
 const mech::String = "./NN/H2/LiDryer.yaml" # reaction mechanism file in cantera format
 
+const Luxmodel::Bool = false       # if use Neural network model
+
 const Cantera::Bool = false         # if use Cantera
 const nthreads_cantera::Int64 = 24  # Cantera openmp threads
 
@@ -44,9 +46,9 @@ const Nx::Int64 = h5read("metrics.h5", "Nx")
 const Ny::Int64 = h5read("metrics.h5", "Ny")
 const Nz::Int64 = h5read("metrics.h5", "Nz")
 const Nxp::Int64 = Nx ÷ Nprocs # make sure it is integer
-# here we use 256 threads/group
-const nthreads::Tuple{Int32, Int32, Int32} = (4, 8, 8)
-const ngroups::Tuple{Int32, Int32, Int32} = (cld((Nxp+2*NG), 4), 
+# here we use 1024 threads/group
+const nthreads::Tuple{Int32, Int32, Int32} = (16, 8, 8)
+const ngroups::Tuple{Int32, Int32, Int32} = (cld((Nxp+2*NG), 16), 
                                             cld((Ny+2*NG), 8),
                                             cld((Nz+2*NG), 8))
 
